@@ -31,77 +31,77 @@ const MODELS = [
     desc: "Breast Analysis",
     icon: Activity,
     accuracy: "98.2%",
-    endpoint: "http://127.0.0.1:8000/api/v2/breast-predict-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/breast-predict-stores",
   },
   {
     name: "Lung Segment Store",
     desc: "Lung Segmentation V2",
     icon: Microscope,
     accuracy: "98.0%",
-    endpoint: "http://0.0.0.0:8100/api/v2/lung-segment-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/lung-segment-store",
   },
   {
     name: "Skin Classification",
     desc: "Dermatology AI",
     icon: Activity,
     accuracy: "96.5%",
-    endpoint: "http://127.0.0.1:8000/api/v2/skin-classification-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/skin-classification-store",
   },
   {
     name: "Blood Classification",
     desc: "Hematology Classifier",
     icon: HeartPulse,
     accuracy: "95.8%",
-    endpoint: "http://127.0.0.1:8000/api/v2/blood-classify-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/blood-classify-store",
   },
   {
     name: "Blood Analysis",
     desc: "Comprehensive Blood AI",
     icon: HeartPulse,
     accuracy: "99.1%",
-    endpoint: "http://127.0.0.1:8000/api/v2/bloodanalysis",
+    endpoint: "http://127.0.0.1:8100/api/v2/bloodanalysis",
   },
   {
     name: "Bone Cancer Detect",
     desc: "Osteology AI",
     icon: Activity,
     accuracy: "94.2%",
-    endpoint: "http://127.0.0.1:8000/api/v2/bone-segment-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/bone-segment-store",
   },
   {
     name: "Bone Fracture Detect",
     desc: "Fracture Identification",
     icon: Activity,
     accuracy: "97.1%",
-    endpoint: "http://127.0.0.1:8000/api/v2/bone-classification-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/bone-classification-store",
   },
   {
     name: "Liver Predict",
     desc: "Hepatic Analysis",
     icon: Activity,
     accuracy: "93.9%",
-    endpoint: "http://127.0.0.1:8000/api/v2/liver-segment-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/liver-segment-store",
   },
   {
     name: "Colon Cell Detect",
     desc: "Colonography AI",
     icon: Microscope,
     accuracy: "96.1%",
-    endpoint: "http://127.0.0.1:8000/api/v2/colon-classification-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/colon-classification-store",
   },
   {
     name: "Lung Cell Detect",
     desc: "Cellular Lung AI",
     icon: Stethoscope,
     accuracy: "96.8%",
-    endpoint: "http://127.0.0.1:8000/api/v2/lung-classify-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/lung-classify-store",
   },
   {
     name: "Brain Predict",
     desc: "Neurology AI",
     icon: Activity,
     accuracy: "98.5%",
-    endpoint: "http://127.0.0.1:8000/api/v2/brain-segment-store",
+    endpoint: "http://127.0.0.1:8100/api/v2/brain-segment-store",
   },
 ]
 
@@ -118,7 +118,7 @@ const MedicalDashboard4 = () => {
   const [mode, setMode] = useState("auto")
   const [isDragging, setIsDragging] = useState(false)
   const [storedFiles, setStoredFiles] = useState([])
-  const [analysisResults, setAnalysisResults] = useState([])
+  const [analysisResults, setAnalysisResults] = useState<any[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [statusMessage, setStatusMessage] = useState("")
@@ -174,40 +174,39 @@ const MedicalDashboard4 = () => {
     setAnalysisResults([])
 
     // ── Auto-Dispatch Logic ──
+// ✅ Correct — send one file at a time with required fields
     if (mode === "auto") {
       setStatusMessage("Sending to Auto-Dispatch Router…")
       try {
-        const formData = new FormData()
-        // Append all stored files as 'files' to the form data
-        storedFiles.forEach((sf) => {
-          if (sf.blob) {
-            formData.append("files", sf.blob, sf.name)
+        const allResults = []
+    
+        for (const sf of storedFiles) {
+          const formData = new FormData()
+          formData.append("file", sf.blob, sf.name)   // 'file' not 'files'
+          formData.append("patientId", "pat_123")      // required
+          formData.append("fileType", "3D")            // required
+    
+          const response = await fetch("http://127.0.0.1:8100/api/v1/auto-dispatch-store", {
+            method: "POST",
+            body: formData,
+          })
+    
+          if (!response.ok) {
+            const err = await response.text()
+            throw new Error(`Server responded with ${response.status}: ${err}`)
           }
-        })
-
-        const response = await fetch("http://0.0.0.0:8100/api/v1/auto-dispatch-store", {
-          method: "POST",
-          body: formData,
-        })
-
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}`)
+    
+          const data = await response.json()
+          allResults.push(data)
         }
-
-        const data = await response.json()
-        
-        // Handle array response or single object response
-        const formattedResults = Array.isArray(data) 
-            ? data 
-            : data.results ? data.results : [data]
-
-        setAnalysisResults(formattedResults.map(res => ({
-            modelName: res.model || "Auto Router",
-            prediction: res,
-            fileName: res.filename || "Batch Upload",
-            error: res.error || null
+    
+        setAnalysisResults(allResults.map(res => ({
+          modelName: res.modelName || "Auto Router",
+          prediction: res.prediction,
+          fileName: res.originalName || "file",
+          error: null
         })))
-
+    
         setStatusMessage("Auto-dispatch complete.")
       } catch (err) {
         console.error("[Dashboard] Auto-dispatch failed:", err)
@@ -217,7 +216,6 @@ const MedicalDashboard4 = () => {
       }
       return
     }
-
     // ── Manual Selection Logic ──
     if (selectedModels.length === 0) {
       alert("Please select at least one AI model.")

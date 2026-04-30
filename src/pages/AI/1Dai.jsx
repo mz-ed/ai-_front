@@ -1,26 +1,27 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutGrid, Calendar, BarChart3, Clock, Stethoscope, HelpCircle, Settings, 
-  ChevronLeft, CheckCircle2, ShieldCheck, AlertTriangle, Timer, FileText, 
+import {
+  LayoutGrid, Calendar, BarChart3, Clock, Stethoscope, HelpCircle, Settings,
+  ChevronLeft, CheckCircle2, ShieldCheck, AlertTriangle, Timer, FileText,
   Image as ImageIcon, BrainCircuit, Bell, AlertCircle
 } from 'lucide-react';
 
 const sidebarItems = [
-  { icon: LayoutGrid, label: 'Overview', active: false },
-  { icon: Calendar, label: 'Appointments', active: false },
-  { icon: BarChart3, label: 'Analysis', active: true },
-  { icon: Clock, label: 'Schedule', active: false },
+  { icon: LayoutGrid,  label: 'Overview',     active: false },
+  { icon: Calendar,    label: 'Appointments', active: false },
+  { icon: BarChart3,   label: 'Analysis',     active: true  },
+  { icon: Clock,       label: 'Schedule',     active: false },
   { icon: Stethoscope, label: 'Consultation', active: false },
 ];
- const { scanData, fileName, filePath } = location.state || {};
+
 const MedicalAnalysisDashboard1 = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Data passed from AIResultsDashboard via navigate(route, { state: { scanData } })
-  const scanData = location.state?.scanData ?? null;
+  // ── Pull state passed from AnalysisCard via navigate(route, { state: { scanData, fileName, filePath } }) ──
+  const { scanData, fileName, filePath } = location.state || {};
 
+  // ── Guard: nothing here without state ────────────────────────────────────
   if (!scanData) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center">
@@ -43,26 +44,47 @@ const MedicalAnalysisDashboard1 = () => {
     );
   }
 
-  // Normalize fields — adapt these keys to match your actual MongoDB document shape
-  const prediction   = scanData.prediction  ?? 'N/A';
-  const confidence   = scanData.confidence != null
-    ? (scanData.confidence <= 1 ? scanData.confidence : scanData.confidence / 100)
-    : null;
-  const executionTime = scanData.executionTime ?? scanData.processingTime ?? null;
-  const originalImage = scanData.original_image ?? scanData.imageUrl ?? scanData.filePath ?? null;
-  const filename      = scanData.filename ?? scanData.name ?? 'Unnamed Scan';
-  const createdAt     = scanData.createdAt
-    ? new Date(scanData.createdAt).toLocaleString()
+  // ── Normalise fields from scanData ────────────────────────────────────────
+  const prediction    = scanData.prediction?.prediction
+                     ?? scanData.prediction?.class_label
+                     ?? scanData.prediction
+                     ?? 'N/A';
+
+  const rawConfidence = scanData.prediction?.confidence ?? scanData.confidence ?? null;
+  const confidence    = rawConfidence !== null
+    ? (rawConfidence <= 1 ? rawConfidence : rawConfidence / 100)
     : null;
 
-  // diagnostics block (optional — only rendered if present)
-  const diagnostics   = scanData.diagnostics ?? null;
-  const allProbs      = diagnostics?.all_probabilities ?? null;
+  const executionTime  = scanData.executionTime ?? scanData.processingTime ?? null;
+
+  // Image: prefer what the backend returned inside prediction, fall back to filePath from route state
+  const originalImage  = scanData.prediction?.original_image
+                      ?? scanData.original_image
+                      ?? scanData.imageUrl
+                      ?? filePath   // ← filePath passed from AnalysisCard
+                      ?? null;
+
+  const resolvedFileName = fileName                          // ← fileName passed from AnalysisCard
+                        ?? scanData.filename
+                        ?? scanData.originalName
+                        ?? 'Unnamed Scan';
+
+  const createdAt = scanData.uploadedAt ?? scanData.createdAt
+    ? new Date(scanData.uploadedAt ?? scanData.createdAt).toLocaleString()
+    : null;
+
+  const scanType   = scanData._resolvedType ?? scanData.prediction?.type ?? scanData.type ?? '—';
+  const modelName  = scanData.modelName ?? '—';
+
+  // Optional diagnostics block
+  const diagnostics      = scanData.prediction?.diagnostics ?? scanData.diagnostics ?? null;
+  const allProbs         = diagnostics?.all_probabilities ?? null;
   const uncertaintyScore = diagnostics?.uncertainty_score ?? null;
 
   return (
     <div className="min-h-screen bg-[#0f1115] flex font-sans text-slate-800">
-      {/* Sidebar */}
+
+      {/* ── Sidebar ── */}
       <aside className="w-64 bg-white border-r border-slate-200 flex-col hidden lg:flex">
         <div className="p-6 flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -84,14 +106,24 @@ const MedicalAnalysisDashboard1 = () => {
             </div>
           ))}
         </nav>
+
+        <div className="p-4 border-t border-slate-200 space-y-1">
+          {[HelpCircle, Settings].map((Icon, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 cursor-pointer">
+              <Icon className="w-5 h-5 text-slate-400" />
+              {i === 0 ? 'Help' : 'Settings'}
+            </div>
+          ))}
+        </div>
       </aside>
 
-      {/* Main Content */}
+      {/* ── Main ── */}
       <main className="flex-1 bg-[#f8f9fa] overflow-auto">
+
         {/* Header */}
         <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between sticky top-0 z-10">
           <h1 className="text-xl font-bold text-slate-900">
-            Dashboard / <span className="text-blue-600">1D Analysis</span>
+            Dashboard / <span className="text-blue-600">{scanType} Analysis</span>
           </h1>
           <div className="flex items-center gap-3">
             <button className="relative p-2 hover:bg-slate-100 rounded-xl transition-colors">
@@ -101,7 +133,8 @@ const MedicalAnalysisDashboard1 = () => {
         </header>
 
         <div className="p-8 max-w-7xl mx-auto">
-          {/* Breadcrumb & Title */}
+
+          {/* Breadcrumb & title */}
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-2">
               <button
@@ -113,12 +146,13 @@ const MedicalAnalysisDashboard1 = () => {
               <h2 className="text-2xl font-bold text-slate-900">{prediction}</h2>
             </div>
             <p className="text-slate-500 text-sm ml-11">
-              File: <span className="font-medium text-slate-700">{filename}</span>
+              File: <span className="font-medium text-slate-700">{resolvedFileName}</span>
+              {modelName !== '—' && <> &nbsp;·&nbsp; Model: <span className="font-medium text-slate-700">{modelName}</span></>}
               {createdAt && <> &nbsp;·&nbsp; Analyzed on {createdAt}</>}
             </p>
           </div>
 
-          {/* Status Tags */}
+          {/* Status tags */}
           <div className="flex flex-wrap gap-3 mb-8">
             <span className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-sm font-medium border border-emerald-200">
               <CheckCircle2 className="w-4 h-4" /> Completed
@@ -135,9 +169,10 @@ const MedicalAnalysisDashboard1 = () => {
             )}
           </div>
 
-          {/* Images Grid */}
+          {/* Images grid */}
           <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Original Image */}
+
+            {/* Original image */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-blue-600" />
@@ -159,7 +194,7 @@ const MedicalAnalysisDashboard1 = () => {
               </div>
             </div>
 
-            {/* Raw data / metadata card */}
+            {/* Scan metadata */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                 <BrainCircuit className="w-5 h-5 text-teal-600" />
@@ -168,8 +203,9 @@ const MedicalAnalysisDashboard1 = () => {
               <div className="p-6 space-y-4">
                 {[
                   { label: 'Scan ID',    value: scanData._id ?? '—' },
-                  { label: 'Type',       value: scanData.type ?? '—' },
-                  { label: 'Filename',   value: filename },
+                  { label: 'Type',       value: scanType },
+                  { label: 'Filename',   value: resolvedFileName },
+                  { label: 'Model',      value: modelName },
                   { label: 'Prediction', value: prediction },
                   { label: 'Confidence', value: confidence !== null ? `${(confidence * 100).toFixed(2)}%` : '—' },
                   { label: 'Date',       value: createdAt ?? '—' },
@@ -183,7 +219,7 @@ const MedicalAnalysisDashboard1 = () => {
             </div>
           </div>
 
-          {/* Probability Distribution — only shown if diagnostics.all_probabilities exists */}
+          {/* Probability distribution — only rendered if diagnostics.all_probabilities exists */}
           {allProbs && (
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
@@ -225,6 +261,7 @@ const MedicalAnalysisDashboard1 = () => {
               </div>
             </div>
           )}
+
         </div>
       </main>
     </div>

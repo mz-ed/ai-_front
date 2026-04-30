@@ -21,7 +21,7 @@
  * CONFIGURATION — the only section you need to edit regularly
  */
 
-const AI_API_BASE = "http://localhost:8000/api/v1"; // FastAPI base URL
+const AI_API_BASE = "http://localhost:8100/api/v1"; // FastAPI base URL
 const UPLOAD_BASE = "http://localhost:3000";   // NestJS base URL
 const UPLOAD_PATH = "/upload/single";          // NestJS endpoint path
 let FILEID = "";
@@ -112,8 +112,13 @@ async function analyzeFileWithModel(blob, fileName, model, meta = {}) {
   try {
     const aiForm = new FormData();
     aiForm.append("file", blob, fileName);
+    
+    // ✅ ADD THESE (must match backend EXACTLY)
+    aiForm.append("patientId", meta.patientId || "pat_123");
+    aiForm.append("fileType", meta.fileType || "scan");
+    aiForm.append("modelName", model.name);
 
-    const aiResponse = await fetch(`${AI_API_BASE}${model.endpoint}`, {
+    const aiResponse = await fetch(`${model.endpoint}`, {
       method: "POST",
       body: aiForm,
     });
@@ -215,4 +220,3 @@ export async function runAnalysis(
 
   return results;
 }
-
